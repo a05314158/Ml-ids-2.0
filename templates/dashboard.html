@@ -1,0 +1,238 @@
+{% extends "base.html" %}
+{% block title %}Панель ML{% endblock %}
+
+{% block content %}
+<div class="row">
+    <!-- Левая колонка: Создание и список моделей -->
+    <div class="col-lg-5">
+        <div class="card mb-4">
+            <div class="card-header"><h4><i class="fa-solid fa-plus me-2"></i>Создать новую модель</h4></div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label for="model-name-input" class="form-label">1. Имя новой модели:</label>
+                    <input type="text" class="form-control" id="model-name-input" placeholder="Например, 'Основная модель TF'">
+                </div>
+                <div class="mb-3">
+                    <label for="model-type-select" class="form-label">2. Тип модели:</label>
+                    <select id="model-type-select" class="form-select">
+                        <option value="isolation_forest" selected>Isolation Forest (Быстрый)</option>
+                        <option value="tensorflow">TensorFlow (Точный)</option>
+                    </select>
+                </div>
+                <div class="d-grid">
+                    <button type="button" class="btn btn-success" id="create-model-btn">
+                        <i class="fa-solid fa-play me-2"></i>Создать и обучить
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-header"><h4><i class="fa-solid fa-list-check me-2"></i>Ваши модели</h4></div>
+            <div class="card-body" id="models-list-container">
+                {% if models %}
+                    <ul class="list-group list-group-flush">
+                        {% for model in models %}
+                            <li class="list-group-item" id="model-item-{{ model.id }}">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <div>
+                                        <strong>{{ model.name }}</strong>
+                                        <span class="badge bg-secondary ms-2">{{ model.model_type }}</span>
+                                    </div>
+                                    <div class="btn-group">
+                                        <button class="btn btn-primary btn-sm activate-btn"
+                                                data-model-id="{{ model.id }}"
+                                                title="Активировать"
+                                                {% if not model.model_path %}disabled{% endif %}>
+                                            <i class="fa-solid fa-power-off"></i>
+                                        </button>
+                                        <button class="btn btn-danger btn-sm delete-btn"
+                                                data-model-id="{{ model.id }}"
+                                                title="Удалить">
+                                            <i class="fa-solid fa-trash-can"></i>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- ИНДИКАТОР ПРОГРЕССА -->
+                                {% if not model.model_path %}
+                                    <div class="progress" style="height: 20px;">
+                                        <div class="progress-bar progress-bar-striped progress-bar-animated bg-success"
+                                             role="progressbar"
+                                             style="width: {{ model.progress }}%;"
+                                             id="progress-bar-{{ model.id }}">
+                                             {{ model.progress }}%
+                                        </div>
+                                    </div>
+                                    <small class="text-muted" id="status-text-{{ model.id }}">Обучение...</small>
+                                {% else %}
+                                    <small class="text-success"><i class="fa-solid fa-check me-1"></i>Готова к работе</small>
+                                {% endif %}
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p class="text-center text-muted">У вас пока нет моделей.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Правая колонка: Статус и мониторинг -->
+    <div class="col-lg-7">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h4><i class="fa-solid fa-chart-line me-2"></i>Статус и Мониторинг</h4>
+                <div class="d-flex align-items-center">
+                    <label for="interface-select" class="form-label me-2 mb-0">Интерфейс:</label>
+                    <select id="interface-select" class="form-select form-select-sm" style="width: auto; max-width: 250px;">
+                        {% for iface in interfaces %}
+                            <option value="{{ iface.value }}" {% if active_state.interface == iface.value %}selected{% endif %}>
+                                {{ iface.name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                    <button type="button" class="btn btn-danger btn-sm ms-3" id="stop-monitoring-btn"><i class="fa-solid fa-stop me-2"></i>Остановить</button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="status-display" class="alert alert-secondary text-center">
+                    <strong>Состояние:</strong> <span id="status-mode">Ожидание...</span>
+                </div>
+                <canvas id="scoreChart"></canvas>
+                <hr>
+                <h5>Журнал сессии:</h5>
+                <div id="log-box" class="form-control" style="height: 250px; overflow-y: scroll; font-family: monospace; white-space: pre-wrap; background-color: #212529;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+
+    const createModelBtn = document.getElementById('create-model-btn');
+    const stopMonitoringBtn = document.getElementById('stop-monitoring-btn');
+    const modelsListContainer = document.getElementById('models-list-container');
+    const chartCtx = document.getElementById('scoreChart').getContext('2d');
+
+    const scoreChart = new Chart(chartCtx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'Anomaly Score', data: [], borderColor: 'rgb(75, 192, 192)',
+                tension: 0.1, pointRadius: 3, pointBackgroundColor: []
+            }]
+        },
+        options: { animation: { duration: 500 }, scales: { y: { beginAtZero: false } } }
+    });
+
+    createModelBtn.addEventListener('click', function() {
+        const modelName = document.getElementById('model-name-input').value.trim();
+        const modelType = document.getElementById('model-type-select').value;
+        if (!modelName) { alert('Введите имя модели'); return; }
+        fetch("{{ url_for('create_model') }}", {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model_name: modelName, model_type: modelType })
+        }).then(response => { if (response.ok) setTimeout(() => window.location.reload(), 1000); });
+    });
+
+    stopMonitoringBtn.addEventListener('click', function() {
+        if (confirm('Остановить ML-мониторинг?')) {
+            fetch("{{ url_for('stop_monitoring') }}", { method: 'POST' });
+        }
+    });
+
+    modelsListContainer.addEventListener('click', function(event) {
+        const button = event.target.closest('button');
+        if (!button) return;
+        const modelId = button.dataset.modelId;
+
+        if (button.classList.contains('delete-btn')) {
+            if (confirm('Удалить модель?')) {
+                fetch("{{ url_for('delete_model') }}", {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ model_id: modelId })
+                }).then(response => { if (response.ok) window.location.reload(); });
+            }
+        } else if (button.classList.contains('activate-btn')) {
+            const interfaceVal = document.getElementById('interface-select').value;
+            if (!interfaceVal) { alert('Интерфейс не выбран.'); return; }
+            fetch("{{ url_for('activate_model') }}", {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ model_id: modelId, interface: interfaceVal })
+            });
+        }
+    });
+
+    function updateChart(status) {
+        const MAX_POINTS = 30;
+        const labels = scoreChart.data.labels;
+        const scores = scoreChart.data.datasets[0].data;
+        const colors = scoreChart.data.datasets[0].pointBackgroundColor;
+
+        labels.push(new Date().toLocaleTimeString());
+        scores.push(status.current_score);
+        colors.push(status.is_anomaly ? 'rgb(255, 99, 132)' : 'rgb(75, 192, 192)');
+
+        if (labels.length > MAX_POINTS) {
+            labels.shift(); scores.shift(); colors.shift();
+        }
+        scoreChart.update();
+    }
+
+    function updateStatus() {
+        fetch("{{ url_for('status') }}")
+            .then(response => response.json())
+            .then(status => {
+                if (!status) return;
+                document.getElementById('status-mode').textContent = status.mode || 'N/A';
+
+                const logBox = document.getElementById('log-box');
+                const newLogHtml = (status.log || []).map(line => {
+                    if (line.includes('[DANGER]')) return `<span class="log-line-danger">${line}</span>`;
+                    if (line.includes('[SUCCESS]')) return `<span class="log-line-success">${line}</span>`;
+                    if (line.includes('[WARNING]')) return `<span class="log-line-warning">${line}</span>`;
+                    return `<span class="log-line-info">${line}</span>`;
+                }).join('\n');
+                if (logBox.innerHTML !== newLogHtml) { logBox.innerHTML = newLogHtml; }
+
+                const isMonitoring = (status.mode || '').includes('Мониторинг');
+                stopMonitoringBtn.disabled = !isMonitoring;
+
+                if (isMonitoring) updateChart(status);
+            });
+    }
+
+    // --- НОВАЯ ФУНКЦИЯ: Опрос прогресса обучения ---
+    function updateModelsProgress() {
+        fetch("{{ url_for('models_status') }}")
+            .then(response => response.json())
+            .then(data => {
+                data.forEach(model => {
+                    const progressBar = document.getElementById(`progress-bar-${model.id}`);
+
+                    if (progressBar) {
+                        // Обновляем ширину и текст
+                        progressBar.style.width = `${model.progress}%`;
+                        progressBar.textContent = `${model.progress}%`;
+
+                        // Если обучение завершено (100% и есть путь), перезагружаем страницу
+                        if (model.progress >= 100 && model.is_ready) {
+                            window.location.reload();
+                        }
+                    }
+                });
+            });
+    }
+
+    setInterval(updateStatus, 2000);
+    setInterval(updateModelsProgress, 2000); // Запускаем опрос прогресса
+    updateStatus();
+});
+</script>
+{% endblock %}

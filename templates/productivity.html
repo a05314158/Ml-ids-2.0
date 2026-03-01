@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}Отчет по продуктивности{% endblock %}
+
+{% block content %}
+<h2 class="mb-4"><i class="fa-solid fa-chart-pie me-2"></i>Анализ использования интернета</h2>
+
+<div class="row">
+    <!-- График Топ Сайтов -->
+    <div class="col-md-6">
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-white"><h5>Топ-10 ресурсов (по времени)</h5></div>
+            <div class="card-body">
+                <canvas id="domainChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- График Активности Пользователей -->
+    <div class="col-md-6">
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-white"><h5>Топ-5 активных устройств</h5></div>
+            <div class="card-body">
+                <canvas id="userChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-header bg-white"><h5>Детальная таблица времени</h5></div>
+    <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Устройство (IP)</th>
+                    <th>Домен</th>
+                    <th>Время (мин)</th>
+                    <th>Последняя активность</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for d in top_domains %}
+                <tr>
+                    <td><span class="badge bg-info text-dark">Локальная сеть</span></td>
+                    <td><strong>{{ d.domain }}</strong></td>
+                    <td>{{ (d.total_time / 60) | int }} мин</td>
+                    <td><small class="text-muted">В реальном времени</small></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Данные для графиков
+    const domainLabels = [{% for d in top_domains %}"{{ d.domain }}",{% endfor %}];
+    const domainData = [{% for d in top_domains %}{{ (d.total_time / 60) | int }},{% endfor %}];
+
+    const userLabels = [{% for u in top_users %}"{{ u.local_ip }}",{% endfor %}];
+    const userData = [{% for u in top_users %}{{ (u.total_time / 60) | int }},{% endfor %}];
+
+    // Круговая диаграмма сайтов
+    new Chart(document.getElementById('domainChart'), {
+        type: 'doughnut',
+        data: {
+            labels: domainLabels,
+            datasets: [{
+                data: domainData,
+                backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40']
+            }]
+        }
+    });
+
+    // Гистограмма пользователей
+    new Chart(document.getElementById('userChart'), {
+        type: 'bar',
+        data: {
+            labels: userLabels,
+            datasets: [{
+                label: 'Минуты в сети',
+                data: userData,
+                backgroundColor: '#36A2EB'
+            }]
+        },
+        options: { scales: { y: { beginAtZero: true } } }
+    });
+</script>
+{% endblock %}

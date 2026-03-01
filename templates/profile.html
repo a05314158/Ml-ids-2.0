@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Профиль{% endblock %}
+{% block content %}
+    <h2 class="mt-4 mb-3">Профиль пользователя: {{ user.username }}</h2>
+    <div class="card">
+        <div class="card-body">
+            <h5 class="card-title">Ваши данные</h5>
+            <p class="card-text"><strong>Имя пользователя:</strong> {{ user.username }}</p>
+            <p class="card-text"><strong>Email:</strong> {{ user.email }}</p>
+            <hr>
+            <h5 class="card-title">Настройки ML-модели (скоро здесь будет форма)</h5>
+            <p class="card-text">Здесь будет форма для настройки `TRAIN_DURATION_MINUTES`, `CONTAMINATION` и других параметров.</p>
+            <button class="btn btn-primary">Сохранить настройки</button>
+            <hr>
+            <h5 class="card-title">Ваши обученные модели (скоро здесь будет список)</h5>
+            <p class="card-text">Здесь будет список ваших обученных ML-моделей.</p>
+            <button class="btn btn-success">Обучить новую модель</button>
+        </div>
+    </div>
+{% endblock %}

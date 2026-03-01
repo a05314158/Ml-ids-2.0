@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Статистика сети{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="fa-solid fa-network-wired me-2"></i>Сетевая активность</h2>
+    <div class="btn-group shadow-sm">
+        <a href="?period=hour" class="btn btn-outline-primary {% if period == 'hour' %}active{% endif %}">Час</a>
+        <a href="?period=day" class="btn btn-outline-primary {% if period == 'day' %}active{% endif %}">День</a>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Локальный IP</th>
+                        <th>Трафик (МБ)</th>
+                        <th>Пакеты</th>
+                        <th>Протоколы</th>
+                        <th>Последний раз видели</th>
+                        <th>Действие</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for s in stats %}
+                    <tr>
+                        <td><code class="fw-bold">{{ s.ip }}</code></td>
+                        <td><span class="text-primary">{{ s.mb }} MB</span></td>
+                        <td>{{ s.packets }}</td>
+                        <td>
+                            {% for proto in s.protos.split(', ') %}
+                                <span class="badge bg-light text-dark border">{{ proto }}</span>
+                            {% endfor %}
+                        </td>
+                        <td><small class="text-muted">{{ s.last_seen }}</small></td>
+                        <td><button class="btn btn-sm btn-outline-secondary">Детали</button></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

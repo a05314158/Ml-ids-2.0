@@ -1,0 +1,11 @@
+venv/
+__pycache__/
+*.pyc
+site.db
+worker_errors.txt
+models/user_*/
+models/system/
+.idea/
+.vscode/
+*.joblib
+*.keras
